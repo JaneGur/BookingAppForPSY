@@ -280,7 +280,7 @@ export async function GET(request: NextRequest) {
 
         const offset = (page - 1) * limit
 
-        // Автоматически переводим прошедшие записи в статус completed
+        // Автоматически обновляем статусы прошедших записей
         const now = new Date()
         const { data: pastBookings } = await supabase
             .from('bookings')
@@ -288,21 +288,39 @@ export async function GET(request: NextRequest) {
             .in('status', ['confirmed', 'pending_payment'])
 
         if (pastBookings && pastBookings.length > 0) {
-            const bookingsToComplete = pastBookings.filter((booking) => {
+            const bookingsToComplete: number[] = []
+            const bookingsToCancel: number[] = []
+
+            pastBookings.forEach((booking) => {
                 try {
                     const bookingDateTime = new Date(`${booking.booking_date}T${booking.booking_time}:00+03:00`)
-                    return bookingDateTime < now
+                    if (bookingDateTime < now) {
+                        if (booking.status === 'confirmed') {
+                            // Оплаченные записи -> completed
+                            bookingsToComplete.push(booking.id)
+                        } else if (booking.status === 'pending_payment') {
+                            // Неоплаченные записи -> cancelled
+                            bookingsToCancel.push(booking.id)
+                        }
+                    }
                 } catch {
-                    return false
+                    // Игнорируем ошибки парсинга даты
                 }
             })
 
+            // Обновляем статусы
             if (bookingsToComplete.length > 0) {
-                const idsToUpdate = bookingsToComplete.map(b => b.id)
                 await supabase
                     .from('bookings')
                     .update({ status: 'completed', updated_at: now.toISOString() })
-                    .in('id', idsToUpdate)
+                    .in('id', bookingsToComplete)
+            }
+
+            if (bookingsToCancel.length > 0) {
+                await supabase
+                    .from('bookings')
+                    .update({ status: 'cancelled', updated_at: now.toISOString() })
+                    .in('id', bookingsToCancel)
             }
         }
 
