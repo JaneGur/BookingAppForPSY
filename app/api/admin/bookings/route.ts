@@ -23,6 +23,47 @@ export async function GET(request: NextRequest) {
 
         const offset = (page - 1) * limit
 
+        // Автоматически обновляем статусы прошедших записей
+        const now = new Date()
+        const { data: pastBookings } = await supabase
+            .from('bookings')
+            .select('id, booking_date, booking_time, status')
+            .in('status', ['confirmed', 'pending_payment'])
+
+        if (pastBookings && pastBookings.length > 0) {
+            const bookingsToComplete: number[] = []
+            const bookingsToCancel: number[] = []
+
+            pastBookings.forEach((booking) => {
+                try {
+                    const bookingDateTime = new Date(`${booking.booking_date}T${booking.booking_time}:00+03:00`)
+                    if (bookingDateTime < now) {
+                        if (booking.status === 'confirmed') {
+                            bookingsToComplete.push(booking.id)
+                        } else if (booking.status === 'pending_payment') {
+                            bookingsToCancel.push(booking.id)
+                        }
+                    }
+                } catch {
+                    // Игнорируем ошибки парсинга даты
+                }
+            })
+
+            if (bookingsToComplete.length > 0) {
+                await supabase
+                    .from('bookings')
+                    .update({ status: 'completed', updated_at: now.toISOString() })
+                    .in('id', bookingsToComplete)
+            }
+
+            if (bookingsToCancel.length > 0) {
+                await supabase
+                    .from('bookings')
+                    .update({ status: 'cancelled', updated_at: now.toISOString() })
+                    .in('id', bookingsToCancel)
+            }
+        }
+
         // Создаем базовый запрос с JOIN к таблице клиентов
         let query = supabase
             .from('bookings')

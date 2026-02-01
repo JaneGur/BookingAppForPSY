@@ -103,7 +103,7 @@ export function ClientDashboardTabs() {
     const { data: pendingBooking } = usePendingBooking(phone)
     const { data: upcomingBooking } = useUpcomingBooking(phone)
 
-    // Загружаем профиль пользователя
+    // Загружаем профиль пользователя и обновляем статусы записей
     useEffect(() => {
         async function loadProfile() {
             if (!session?.user?.id) {
@@ -112,6 +112,9 @@ export function ClientDashboardTabs() {
             }
 
             try {
+                // Обновляем статусы прошедших записей
+                fetch('/api/bookings/update-statuses', { method: 'POST' }).catch(() => {})
+                
                 const res = await fetch('/api/profile')
                 if (res.ok) {
                     const data = (await res.json()) as ClientProfile

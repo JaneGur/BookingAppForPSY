@@ -111,6 +111,11 @@ export function BookingsTab({ onCreateBooking, refreshTrigger }: BookingsTabProp
             setIsLoading(true)
         }
         try {
+            // Обновляем статусы прошедших записей перед загрузкой
+            if (page === 1 && !append) {
+                fetch('/api/bookings/update-statuses', { method: 'POST' }).catch(() => {})
+            }
+            
             const params = new URLSearchParams({
                 page: page.toString(),
                 limit: BOOKINGS_PER_PAGE.toString(),
